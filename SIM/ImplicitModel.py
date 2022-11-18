@@ -29,9 +29,9 @@ class ImplicitModel(torch.nn.Module):
         return transpose(self.C @ X + self.D @ U)
 
     def set_weights(self, A, B, C, D):
-        self.A.data.copy_(torch.from_numpy(A))
-        self.B.data.copy_(torch.from_numpy(B))
-        self.C.data.copy_(torch.from_numpy(C))
-        self.D.data.copy_(torch.from_numpy(D))
+        self.A.data.copy_(A)
+        self.B.data.copy_(B)
+        self.C.data.copy_(C)
+        self.D.data.copy_(D)
 
         return self

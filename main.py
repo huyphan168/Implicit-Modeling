@@ -60,20 +60,15 @@ def SIM_training(cfg, states, shape):
     B = torch.zeros(n, p)
     C = torch.zeros(q, n)
     D = torch.zeros(q, p)
-    print(A.size())
-    print(B.size())
-    print(C.size())
-    print(D.size())
     #mini_params = (1xm)
     weight_AB = ProgressParallel(n_jobs=cfg.workers)(joblib.delayed(SIM_element)(cfg, X, U, mini_params) for mini_params in 
                         zip(torch.split(Z, 1, dim=0), torch.split(A, 1, dim=0), torch.split(B, 1, dim=0)))
     weight_CD = ProgressParallel(n_jobs=cfg.workers)(joblib.delayed(SIM_element)(cfg, X, U, mini_params) for mini_params in 
                         zip(torch.split(Y, 1, dim=0), torch.split(C, 1, dim=0), torch.split(D, 1, dim=0)))
-    
-    A = torch.cat([ab[0] for ab in weight_AB])
-    B = torch.cat([ab[1] for ab in weight_AB])
-    C = torch.cat([cd[0] for cd in weight_CD])
-    D = torch.cat([cd[1] for cd in weight_CD])
+    A = torch.concat([torch.tensor(ab[0]).unsqueeze(0) for ab in weight_AB])
+    B = torch.concat([torch.tensor(ab[1]).unsqueeze(0) for ab in weight_AB])
+    C = torch.concat([torch.tensor(cd[0]).unsqueeze(0) for cd in weight_CD])
+    D = torch.concat([torch.tensor(cd[1]).unsqueeze(0) for cd in weight_CD])
     return A, B, C, D
 
 def main() -> None:

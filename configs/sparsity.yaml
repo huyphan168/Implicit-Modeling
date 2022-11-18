@@ -2,7 +2,7 @@ explicit:
   type: fnn
   architecture: [784, 64, 32, 16, 10]
   optimizer: Adam
-  epoch: 1
+  epoch: 100
   lr: 0.001
   log_interval: 20000
 implicit:
@@ -11,7 +11,7 @@ implicit:
   objective: sparsity
   lambda1: 0.1
   alpha: 1e-3
-  training_size: 0.05 # 0.05% of the training set (can be from 0.0-0.3)
+  training_size: 0.1 # 0.05% of the training set (can be from 0.0-0.3)
 evaluation:
   baselines: [explicit, implicit]
   metric: sparsity

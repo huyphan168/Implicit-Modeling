@@ -8,6 +8,7 @@ Unofficial Implement of paper [State-driven Implicit Modeling for Sparsity and R
 - [ ] Validation with baselines
 - [ ] Parallel SIM training with shared memory for X,U
 - [ ] ResNet state implementation
+- [ ] Quicker solver for implicit model
 
 ## Possible featuress:
 - [ ] Quick evaluation with other baselines just by configs like SSS, SPR

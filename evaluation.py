@@ -26,13 +26,15 @@ def evaluate(cfg, weight_matrices, ex_model, test_loader, device):
             q, p = D.shape[0], D.shape[1]
             implicit_model = ImplicitModel(n, cfg.bs, p, q)
             implicit_model.set_weights(A,B,C,D)
+            implicit_model.to(device)
             implicit_model.eval()
             test_loss = 0
             correct = 0
             with torch.no_grad():
                 for data, target in test_loader:
                     data, target = data.to(device), target.to(device)
-                    output = implicit_model(data)
+                    #TO:DO ugly work around
+                    output = implicit_model(data.squeeze(1).flatten(start_dim=-2))
                     test_loss += F.nll_loss(output, target, reduction='sum').item()
                     pred = output.argmax(dim=1, keepdim=True)
                     correct += pred.eq(target.view_as(pred)).sum().item()
