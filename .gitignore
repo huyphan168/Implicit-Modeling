@@ -1,0 +1,7 @@
+checkpoint/*
+.vscode-upload.json
+results/*
+logs/*
+__pycache__/*
+data/*
+SIM/__pycache__/*
