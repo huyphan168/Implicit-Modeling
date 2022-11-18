@@ -6,12 +6,12 @@ explicit:
   lr: 0.001
   log_interval: 20000
 implicit:
-  workers: 32
+  workers: 1
   kappa: 0.99
   objective: sparsity
   lambda1: 0.1
   alpha: 1e-3
-  training_size: 0.1 # 0.05% of the training set (can be from 0.0-0.3)
+  training_size: 0.05 # 0.05% of the training set (can be from 0.0-0.3)
 evaluation:
   baselines: [explicit, implicit]
   metric: sparsity

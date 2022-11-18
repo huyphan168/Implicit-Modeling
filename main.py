@@ -43,9 +43,9 @@ def training_explicit(cfg, ex_model, ex_optimizer, ex_criterion, train_loader, d
                 print('Train Epoch: {} [{}/{}]\tLoss: {}\tAccuracy: {} %'.format(
                     epoch+1, batch_idx * len(data), len(train_loader.dataset), round(loss.item(), 2), round(100*acc,2)))
     return ex_model
-def SIM_element(cfg, X, U, params):
+def SIM_element(cfg, X, U, params, verbose):
     # state_match, a, b = params
-    optimizer = build_optimizer(cfg, X, U, params)
+    optimizer = build_optimizer(cfg, X, U, params, verbose)
     return optimizer.optimize()
         
 def SIM_training(cfg, states, shape):
@@ -61,10 +61,10 @@ def SIM_training(cfg, states, shape):
     C = torch.zeros(q, n)
     D = torch.zeros(q, p)
     #mini_params = (1xm)
-    weight_AB = ProgressParallel(n_jobs=cfg.workers)(joblib.delayed(SIM_element)(cfg, X, U, mini_params) for mini_params in 
-                        zip(torch.split(Z, 1, dim=0), torch.split(A, 1, dim=0), torch.split(B, 1, dim=0)))
-    weight_CD = ProgressParallel(n_jobs=cfg.workers)(joblib.delayed(SIM_element)(cfg, X, U, mini_params) for mini_params in 
-                        zip(torch.split(Y, 1, dim=0), torch.split(C, 1, dim=0), torch.split(D, 1, dim=0)))
+    weight_AB = ProgressParallel(n_jobs=cfg.workers)(joblib.delayed(SIM_element)(cfg, X, U, mini_params, idx) for idx, mini_params in enumerate(
+                        zip(torch.split(Z, 1, dim=0), torch.split(A, 1, dim=0), torch.split(B, 1, dim=0))))
+    weight_CD = ProgressParallel(n_jobs=cfg.workers)(joblib.delayed(SIM_element)(cfg, X, U, mini_params, idx) for idx, mini_params in enumerate(
+                        zip(torch.split(Y, 1, dim=0), torch.split(C, 1, dim=0), torch.split(D, 1, dim=0))))
     A = torch.concat([torch.tensor(ab[0]).unsqueeze(0) for ab in weight_AB])
     B = torch.concat([torch.tensor(ab[1]).unsqueeze(0) for ab in weight_AB])
     C = torch.concat([torch.tensor(cd[0]).unsqueeze(0) for cd in weight_CD])
