@@ -8,6 +8,8 @@ from SIM.optimization import build_optimizer
 from evaluation import evaluate
 from tqdm import tqdm 
 import joblib
+import os.path as osp
+import numpy as np
 
 class ProgressParallel(joblib.Parallel):
     def __call__(self, *args, **kwargs):
@@ -43,32 +45,34 @@ def training_explicit(cfg, ex_model, ex_optimizer, ex_criterion, train_loader, d
                 print('Train Epoch: {} [{}/{}]\tLoss: {}\tAccuracy: {} %'.format(
                     epoch+1, batch_idx * len(data), len(train_loader.dataset), round(loss.item(), 2), round(100*acc,2)))
     return ex_model
-def SIM_element(cfg, X, U, params, verbose):
+def SIM_element(cfg, X, U, params, verbose, wellposed):
     # state_match, a, b = params
-    optimizer = build_optimizer(cfg, X, U, params, verbose)
+    optimizer = build_optimizer(cfg, X, U, params, verbose, wellposed)
     return optimizer.optimize()
         
 def SIM_training(cfg, states, shape):
     #Z = (nxm), X = (nxm), Y = (qxm)
     Z, X, Y, U = states
-    Z.cpu()
-    X.cpu()
-    Y.cpu()
-    U.cpu()
+    Z = Z.cpu().detach().numpy()
+    X = X.cpu().detach().numpy()
+    Y= Y.cpu().detach().numpy()
+    U = U.cpu().detach().numpy()
     n,p,q = shape
     A = torch.zeros(n, n)
     B = torch.zeros(n, p)
     C = torch.zeros(q, n)
     D = torch.zeros(q, p)
     #mini_params = (1xm)
-    weight_AB = ProgressParallel(n_jobs=cfg.workers)(joblib.delayed(SIM_element)(cfg, X, U, mini_params, idx) for idx, mini_params in enumerate(
-                        zip(torch.split(Z, 1, dim=0), torch.split(A, 1, dim=0), torch.split(B, 1, dim=0))))
-    weight_CD = ProgressParallel(n_jobs=cfg.workers)(joblib.delayed(SIM_element)(cfg, X, U, mini_params, idx) for idx, mini_params in enumerate(
-                        zip(torch.split(Y, 1, dim=0), torch.split(C, 1, dim=0), torch.split(D, 1, dim=0))))
-    A = torch.concat([torch.tensor(ab[0]).unsqueeze(0) for ab in weight_AB])
-    B = torch.concat([torch.tensor(ab[1]).unsqueeze(0) for ab in weight_AB])
-    C = torch.concat([torch.tensor(cd[0]).unsqueeze(0) for cd in weight_CD])
-    D = torch.concat([torch.tensor(cd[1]).unsqueeze(0) for cd in weight_CD])
+    print(U.sum())
+    # import ipdb; ipdb.set_trace()
+    weight_AB = ProgressParallel(n_jobs=cfg.workers)(joblib.delayed(SIM_element)(cfg, X, U, mini_params, idx, True) for idx, mini_params in enumerate(
+                        zip(np.split(Z, Z.shape[0], axis=0), torch.split(A, 1, dim=0), torch.split(B, 1, dim=0))))
+    weight_CD = ProgressParallel(n_jobs=cfg.workers)(joblib.delayed(SIM_element)(cfg, X, U, mini_params, idx, False) for idx, mini_params in enumerate(
+                        zip(np.split(Y, Y.shape[0], axis=0), torch.split(C, 1, dim=0), torch.split(D, 1, dim=0))))
+    A = torch.cat([torch.tensor(ab[0]).unsqueeze(0) for ab in weight_AB])
+    B = torch.cat([torch.tensor(ab[1]).unsqueeze(0) for ab in weight_AB])
+    C = torch.cat([torch.tensor(cd[0]).unsqueeze(0) for cd in weight_CD])
+    D = torch.cat([torch.tensor(cd[1]).unsqueeze(0) for cd in weight_CD])
     return A, B, C, D
 
 def main() -> None:
@@ -78,20 +82,34 @@ def main() -> None:
     ex_model, ex_optimizer = builder_explicit(cfg.explicit)
     ex_criterion = nn.CrossEntropyLoss()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    ex_model.to(device)
-    torch.save(ex_model.state_dict(), args.output_path + "explicit_model.pt")
     ex_criterion.to(device)
     print("Loading data ...")
     train_loader, test_loader = load_data(cfg)
     print("Training explicit ...")
-    ex_model_trained = training_explicit(cfg.explicit, ex_model, ex_optimizer, ex_criterion, train_loader, device)
+    if osp.exists(args.output_path + "explicit_model.pt"):
+        ex_model_weight = torch.load(args.output_path + "explicit_model.pt")
+        ex_model.load_state_dict(ex_model_weight)
+        ex_model.to(device)
+    else:
+        ex_model.to(device)
+        ex_model = training_explicit(cfg.explicit, ex_model, ex_optimizer, ex_criterion, train_loader, device) 
+        torch.save(ex_model.state_dict(), args.output_path + "explicit_model.pt")
     print("Building state matrix ...")
-    states, shape = build_SIM_matrix(cfg, ex_model_trained, train_loader, device)
+    states, shape = build_SIM_matrix(cfg, ex_model, train_loader, device)
     print("Training implicit ...")
+    
     A,B,C,D = SIM_training(cfg.implicit, states, shape)
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(15,15), dpi=300)
+    plt.spy(torch.cat([A],dim=-1).numpy(), markersize=0.01, color='black')
+    plt.savefig("states.png")
+    import pickle
+    with open(osp.join(args.output_path, "states.pkl"), "wb") as f:
+        pickle.dump({"states": [A,B,C,D]}, f)
     #Evaluation both explicit and implicit models
-    evaluate(cfg.evaluation, [A,B,C,D], ex_model_trained, test_loader, device)
-
+    
+    evaluate(cfg.evaluation, [A,B,C,D], ex_model, test_loader, device)
+    evaluate(cfg.evaluation, [A,B,C,D], ex_model, train_loader, device)
 
 if __name__ == "__main__":
     main()
