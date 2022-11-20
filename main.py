@@ -10,7 +10,7 @@ from tqdm import tqdm
 import joblib
 import os.path as osp
 import numpy as np
-
+import pickle as pkl
 class ProgressParallel(joblib.Parallel):
     def __call__(self, *args, **kwargs):
         with tqdm() as self._pbar:
@@ -96,20 +96,41 @@ def main() -> None:
         torch.save(ex_model.state_dict(), args.output_path + "explicit_model.pt")
     print("Building state matrix ...")
     states, shape = build_SIM_matrix(cfg, ex_model, train_loader, device)
-    print("Training implicit ...")
     
-    A,B,C,D = SIM_training(cfg.implicit, states, shape)
+    if cfg.implicit.evaluate:
+        print("Loading optimized weight matrices")
+        with open("results/states.pkl", "rb") as f:
+            unpickler = pkl.Unpickler(f)
+            states_load = unpickler.load()
+            states_load = states_load["states"]
+            A, B, C, D = states_load
+            
+            print(np.sum((np.abs(D.numpy())<1e-4).astype(int))/np.prod(D.shape))
+            print(np.mean(C.cpu().detach().numpy()))
+            print(np.max(C.cpu().detach().numpy()))
+    else:
+        print("Training implicit ...")
+        A,B,C,D = SIM_training(cfg.implicit, states, shape)
+        import pickle
+        with open(osp.join(args.output_path, "states.pkl"), "wb") as f:
+            pickle.dump({"states": [A,B,C,D]}, f)
+    
+    #Prunning
+    B[np.abs(B)<1e-3] = 0
+    A[np.abs(A)<1e-4] = 0
+    # C = torch.zeros_like(C)
+    D[np.abs(D)<2e-8] = 0
+    #Evaluation both explicit and implicit models
+            
     import matplotlib.pyplot as plt
     plt.figure(figsize=(15,15), dpi=300)
-    plt.spy(torch.cat([A],dim=-1).numpy(), markersize=0.01, color='black')
+    M1 = torch.cat([A, B],dim=-1).numpy()
+    M2 = torch.cat([C, D],dim=-1).numpy()
+    M = np.concatenate([M1, M2], axis=0)
+    plt.spy(M, markersize=0.01, color='black')
     plt.savefig("states.png")
-    import pickle
-    with open(osp.join(args.output_path, "states.pkl"), "wb") as f:
-        pickle.dump({"states": [A,B,C,D]}, f)
-    #Evaluation both explicit and implicit models
-    
     evaluate(cfg.evaluation, [A,B,C,D], ex_model, test_loader, device)
-    evaluate(cfg.evaluation, [A,B,C,D], ex_model, train_loader, device)
+    # evaluate(cfg.evaluation, [A,B,C,D], ex_model, train_loader, device)
 
 if __name__ == "__main__":
     main()

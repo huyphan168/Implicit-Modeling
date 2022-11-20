@@ -2,6 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from SIM.ImplicitModel import ImplicitModel
+import numpy as np
+
+def count_zeros(matrix):
+    return np.count_nonzero(matrix == 0)/np.prod(matrix.shape)*100
 
 def evaluate(cfg, weight_matrices, ex_model, test_loader, device):
     for method in cfg.baselines:
@@ -43,5 +47,13 @@ def evaluate(cfg, weight_matrices, ex_model, test_loader, device):
             print('Implicit model: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
                 test_loss, correct, len(test_loader.dataset),
                 100. * correct / len(test_loader.dataset)))
+            print("Sparsity of A: {0:.2f}%".format(count_zeros(A)))
+            print("Sparsity of B: {0:.2f}%".format(count_zeros(B)))
+            print("Sparsity of C: {0:.2f}%".format(count_zeros(C)))
+            print("Sparsity of D: {0:.2f}%".format(count_zeros(D)))
+            M1 = torch.cat([A,B], dim=1)
+            M2 = torch.cat([C,D], dim=1)
+            M = torch.cat([M1,M2], dim=0)
+            print("Sparsity of M: {0:.2f}%".format(count_zeros(M)))
         else:
             raise NotImplementedError
