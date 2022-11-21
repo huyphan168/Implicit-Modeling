@@ -11,6 +11,10 @@ import joblib
 import os.path as osp
 import numpy as np
 import pickle as pkl
+import torch.nn.functional as F
+from torch.utils.data import Subset, DataLoader
+import random
+random.seed(0)
 class ProgressParallel(joblib.Parallel):
     def __call__(self, *args, **kwargs):
         with tqdm() as self._pbar:
@@ -29,6 +33,10 @@ def parse_arguments():
     return args
 
 def training_explicit(cfg, ex_model, ex_optimizer, ex_criterion, train_loader, device):
+    m = int(len(train_loader.dataset)*cfg.training_size)
+    indices = random.sample(range(len(train_loader.dataset)), m)
+    subset = Subset(train_loader.dataset, indices)
+    train_loader = DataLoader(subset, batch_size=64, num_workers=2)
     for epoch in range(cfg.epoch):
         ex_model.train()
         for batch_idx, (data, target) in enumerate(train_loader):
@@ -55,7 +63,7 @@ def SIM_training(cfg, states, shape):
     Z, X, Y, U = states
     Z = Z.cpu().detach().numpy()
     X = X.cpu().detach().numpy()
-    Y= Y.cpu().detach().numpy()
+    Y = Y.cpu().detach().numpy()
     U = U.cpu().detach().numpy()
     n,p,q = shape
     A = torch.zeros(n, n)
@@ -116,21 +124,46 @@ def main() -> None:
             pickle.dump({"states": [A,B,C,D]}, f)
     
     #Prunning
-    B[np.abs(B)<1e-3] = 0
-    A[np.abs(A)<1e-4] = 0
-    # C = torch.zeros_like(C)
-    D[np.abs(D)<2e-8] = 0
+    
+    # B[np.abs(B)<1e-3] = 0
+    # A[np.abs(A)<1e-4] = 0
+
+    
+    
+    # D[np.abs(D)<2e-8] = 0
     #Evaluation both explicit and implicit models
+    # ex_model.eval()
+    # test_loss = 0
+    # correct = 0
+    # with torch.no_grad():
+    #     for data, target in test_loader:
+    #         data, target = data.to(device), target.to(device)
+    #         output = ex_model(data)
+    #         test_loss += F.nll_loss(output, target, reduction='sum').item()
+    #         pred = output.argmax(dim=1, keepdim=True)
+    #         correct += pred.eq(target.view_as(pred)).sum().item()
+    # test_loss /= len(test_loader.dataset)
+    # print('Explicit model: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
+    #     test_loss, correct, len(test_loader.dataset),
+    #     100. * correct / len(test_loader.dataset)))
             
     import matplotlib.pyplot as plt
     plt.figure(figsize=(15,15), dpi=300)
     M1 = torch.cat([A, B],dim=-1).numpy()
     M2 = torch.cat([C, D],dim=-1).numpy()
     M = np.concatenate([M1, M2], axis=0)
+
+    threshold = np.percentile(np.abs(M.flatten()), cfg.implicit.sparsity_ratio)
+    print(threshold)
+    for matrix in [A,B,C]:
+        matrix[np.abs(matrix)<threshold] = 0
+    M1 = torch.cat([A, B],dim=-1).numpy()
+    M2 = torch.cat([C, D],dim=-1).numpy()
+    M = np.concatenate([M1, M2], axis=0)
     plt.spy(M, markersize=0.01, color='black')
     plt.savefig("states.png")
     evaluate(cfg.evaluation, [A,B,C,D], ex_model, test_loader, device)
-    # evaluate(cfg.evaluation, [A,B,C,D], ex_model, train_loader, device)
+    evaluate(cfg.evaluation, [A,B,C,D], ex_model, train_loader, device)
 
 if __name__ == "__main__":
     main()

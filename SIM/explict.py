@@ -44,6 +44,9 @@ class FNN(nn.Module):
             [nn.Linear(self.architecture[i], self.architecture[i + 1], bias=False) for i in range(len(self.architecture) - 1)])
         for rescaled_layer, layer in zip(self.rescaled_layers, self.layers):
             rescaled_layer.weight.data = layer.weight.data / (2*max_norm)
+            # rescaled_layer.weight.data = layer.weight.data
+        print("max norm is", max_norm)
+
             # layer.bias.data = layer.bias.data / 1.5*self.maxrownorm()
 
 def builder_explicit(cfg):
@@ -79,6 +82,7 @@ def build_SIM_matrix(cfg, ex_model, train_loader, device):
                 data = ex_model.activation(data)
                 temp_post.append(data)
             # output = F.softmax(ex_model.layers[-1](data), dim=-1)
+            # output = F.softmax(ex_model.rescaled_layers[-1](data), dim=-1)
             output = ex_model.layers[-1](data)
             Z[:, i*bs: i*bs+length] = torch.cat(temp[::-1], dim=1).T
             X[:, i*bs: i*bs+length] = torch.cat(temp_post[::-1], dim=1).T

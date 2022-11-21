@@ -4,8 +4,22 @@ import torch.nn.functional as F
 from SIM.ImplicitModel import ImplicitModel
 import numpy as np
 
-def count_zeros(matrix):
-    return np.count_nonzero(matrix == 0)/np.prod(matrix.shape)*100
+def count_nonzeros(matrix):
+    return np.count_nonzero(matrix != 0)
+
+def sparsity(matrices, N0):
+    A,B,C,D = matrices
+    M1 = torch.cat([A,B], dim=1)
+    M2 = torch.cat([C,D], dim=1)
+    M = torch.cat([M1,M2], dim=0)
+    print("non zeros M", count_nonzeros(M))
+    return (1-count_nonzeros(M)/N0)*100
+
+def non_zero_params(model):
+    non_zeros = 0
+    for param in model.parameters():
+            non_zeros += torch.sum((param != 0).int()).item()
+    return non_zeros
 
 def evaluate(cfg, weight_matrices, ex_model, test_loader, device):
     for method in cfg.baselines:
@@ -16,6 +30,7 @@ def evaluate(cfg, weight_matrices, ex_model, test_loader, device):
             with torch.no_grad():
                 for data, target in test_loader:
                     data, target = data.to(device), target.to(device)
+                    # import ipdb; ipdb.set_trace()
                     output = ex_model(data)
                     test_loss += F.nll_loss(output, target, reduction='sum').item()
                     pred = output.argmax(dim=1, keepdim=True)
@@ -40,6 +55,7 @@ def evaluate(cfg, weight_matrices, ex_model, test_loader, device):
                     #TO:DO ugly work around
                     output = implicit_model(data.squeeze(1).flatten(start_dim=-2))
                     output = F.softmax(output, dim=-1)
+                    # import ipdb; ipdb.set_trace()
                     test_loss += F.nll_loss(output, target, reduction='sum').item()
                     pred = output.argmax(dim=1, keepdim=True)
                     correct += pred.eq(target.view_as(pred)).sum().item()
@@ -47,13 +63,7 @@ def evaluate(cfg, weight_matrices, ex_model, test_loader, device):
             print('Implicit model: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
                 test_loss, correct, len(test_loader.dataset),
                 100. * correct / len(test_loader.dataset)))
-            print("Sparsity of A: {0:.2f}%".format(count_zeros(A)))
-            print("Sparsity of B: {0:.2f}%".format(count_zeros(B)))
-            print("Sparsity of C: {0:.2f}%".format(count_zeros(C)))
-            print("Sparsity of D: {0:.2f}%".format(count_zeros(D)))
-            M1 = torch.cat([A,B], dim=1)
-            M2 = torch.cat([C,D], dim=1)
-            M = torch.cat([M1,M2], dim=0)
-            print("Sparsity of M: {0:.2f}%".format(count_zeros(M)))
+            print("non zero params", non_zero_params(ex_model)//2)
+            print("Sparsity of M: {0:.2f}%".format(sparsity([A,B,C,D], non_zero_params(ex_model)//2)))
         else:
             raise NotImplementedError
