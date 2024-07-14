@@ -1,5 +1,5 @@
 # Implicit-Modeling
-Unofficial Implement of paper [State-driven Implicit Modeling for Sparsity and Robustness in Neural Networks](https://arxiv.org/pdf/2209.09389.pdf) by Phan Nhat Huy
+Better implementation of paper [State-driven Implicit Modeling for Sparsity and Robustness in Neural Networks](https://arxiv.org/pdf/2209.09389.pdf) by Phan Nhat Huy
 
 ## To do:
 - [x] Complete the overview flow
